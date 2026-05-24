@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: lab2-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lab2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
+      - ./sql:/sql:ro
+      - ./исходные данные:/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d lab2"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: lab2-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: lab2
+      CLICKHOUSE_USER: lab2
+      CLICKHOUSE_PASSWORD: lab2
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    container_name: lab2-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  spark:
+    image: bitnamilegacy/spark:3.5.6
+    container_name: lab2-spark
+    user: root
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    environment:
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/lab2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      CLICKHOUSE_URL: jdbc:clickhouse://clickhouse:8123/lab2
+      CLICKHOUSE_USER: lab2
+      CLICKHOUSE_PASSWORD: lab2
+      MONGO_URI: mongodb://mongo:27017/lab2
+    volumes:
+      - ./spark:/opt/bitnami/spark/jobs:ro
+      - spark_ivy:/tmp/.ivy2
+    command: ["sleep", "infinity"]
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  mongo_data:
+  spark_ivy:
